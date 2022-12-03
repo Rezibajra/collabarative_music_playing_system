@@ -1,16 +1,25 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Grid, Button, Typography } from "@material-ui/core";
 import CreateRoomPage from "./CreateRoomPage";
+import MusicPlayer from "./MusicPlayer";
 
 export default function Room(props) {
     const [votesToSkip, setVotesToSkip] = useState(2);
     const [guestCanPause, setGuestCanPause] = useState(false);
     const [isHost, setIsHost] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
-
+    const [spotifyAuthenticated, setSpotifyAuthenticated] = useState(false);
+    const [song, setSong] = useState({});
     const {roomCode} = useParams();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const interval = setInterval(getCurrentSong, 1000);
+        return () => {
+            clearInterval(interval);
+        };
+    })
 
     function getRoomDetails() {
         fetch('/api/get-room' + '?code=' + roomCode).then((response) => {
@@ -24,10 +33,36 @@ export default function Room(props) {
             setVotesToSkip(data.votes_to_skip);
             setGuestCanPause(data.guest_can_pause);
             setIsHost(data.is_host);
+            if (data.is_host) {
+                authenticateSpotify();
+            }
         })
     }
 
     getRoomDetails();
+
+    function authenticateSpotify() {
+        fetch('/spotify/is-authenticated').then((response) => response.json()).then((data) => {
+            setSpotifyAuthenticated(data.status);
+            if (!data.status) {
+                fetch('/spotify/get-auth-url').then((response) => response.json()).then((data) => {
+                    window.location.replace(data.url);
+                });
+            }
+        })    
+    }
+
+    function getCurrentSong() {
+        fetch('/spotify/current-song').then((response) => {
+            if (!response.ok) {
+                return {};
+            } else {
+                return response.json();
+            }
+        }).then((data) => {
+            setSong(data);
+        })
+    }
 
     function leaveButtonPressed() {
         const requestOptions = {
@@ -93,21 +128,7 @@ export default function Room(props) {
                         Code: {roomCode}
                     </Typography>
                 </Grid>
-                <Grid item xs={12} align="center">
-                    <Typography variant="h6" component="h6">
-                        Votes: {votesToSkip}
-                    </Typography>
-                </Grid>
-                <Grid item xs={12} align="center">
-                    <Typography variant="h6" component="h6">
-                        Guest Can Pause: {guestCanPause.toString()}
-                    </Typography>
-                </Grid>
-                <Grid item xs={12} align="center">
-                    <Typography variant="h6" component="h6">
-                        Host: {isHost.toString()}
-                    </Typography>
-                </Grid>
+                <MusicPlayer {...song}/>
                 {isHost ? renderSettingsButton() : null}
                 <Grid item xs={12} align="center">
                     <Button
